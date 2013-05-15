@@ -1,11 +1,5 @@
 NAME
-    WikiText::Kwiki - Kwiki WikiText Module
-
-SYNOPSIS
-        kwiki2markdown kwiki_dir markdown_dir
-
-DESCRIPTION
-    This module can convert Kwiki markup to Markdown.
+    WikiText::Kwiki - Kwiki WikiText Utilities
 
 AUTHOR
     Ingy döt Net <ingy@cpan.org>

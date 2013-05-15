@@ -22,17 +22,28 @@ my $unreserved = "A-Za-z0-9\Q$mark\E";
 my $uric       = quotemeta($reserved) . $unreserved . "%";
 
 sub create_grammar {
-    my $all_phrases = [
-        qw(wikilink a tt b i)
-    ];
     my $all_blocks = [
         qw(
             pre
-            hr hx
-            ul ol
+            hr
+            hx
+            ul
+            ol
             table
-            p empty
+            p
+            empty
             else
+        )
+    ];
+    my $all_phrases = [
+        qw(
+            tt
+            b
+            i
+            nolink
+            camel
+            hyper
+            force
         )
     ];
 
@@ -44,43 +55,6 @@ sub create_grammar {
             blocks => $all_blocks,
         },
 
-        empty => {
-            match => qr/^\s*\n/,
-            filter => sub {
-                my $node = shift;
-                $node->{type} = '';
-            },
-        },
-
-        p => {
-           match =>  qr/^(            # Capture whole thing
-                (?m:
-                    ^(?!        # All consecutive lines *not* starting with
-                    (?:
-                        [\#\-\*]+[\ ] |
-                        [\=\|\>] |
-                        \.\w+\s*\n |
-                        \{[^\}]+\}\s*\n
-                    )
-                    )
-                    .*\S.*\n
-                )+
-                )
-                (\s*\n)*   # and all blank lines after
-            /x,
-            phrases => $all_phrases,
-            filter => sub { chomp },
-        },
-
-        else => {
-            match => qr/^(.*)\n/,
-            phrases => [],
-            filter => sub {
-                my $node = shift;
-                $node->{type} = 'p';
-            },
-        },
-
         pre => {
             match => qr/^((?: +\S.*\n)(?:(?: +\S.*\n| *\n)*(?: +\S.*\n))?)/,
             filter => sub {
@@ -90,6 +64,10 @@ sub create_grammar {
                 }
                 $node->{text} = $_;
             },
+        },
+
+        hr => {
+            match => qr/^--+(?:\s*\n)?/,
         },
 
         hx => {
@@ -127,18 +105,14 @@ sub create_grammar {
         },
 
         li => {
-            match => qr/(.*)\n/,    # Capture the whole line
+            match => qr/(.*\n)/,    # Capture the whole line
             phrases => $all_phrases,
         },
 
         li2 => {
             type => '',
-            match => qr/(.*)\n/,    # Capture the whole line
+            match => qr/(.*\n)/,    # Capture the whole line
             phrases => $all_phrases,
-        },
-
-        hr => {
-            match => qr/^--+(?:\s*\n)?/,
         },
 
         table => {
@@ -165,17 +139,42 @@ sub create_grammar {
             phrases => $all_phrases,
         },
 
-        wikilink => {
-            match => qr/
-                (?:"([^"]*)"\s*)?(?:^|(?<=[^$ALPHANUM]))\[(?=[^\s\[\]])
-                (.*?)
-                \](?=[^$ALPHANUM]|\z)
+        p => {
+            match => qr/^(
+                (?:
+                    (?!
+                        [\ \#\=\|] |
+                        [\*\0]\ |
+                        ----\n
+                    )
+                    .*\S.*\n
+                )+
+            )
+            (\ *\n)*
             /x,
+            phrases => $all_phrases,
+            filter => sub { s/ +$//gm },
+        },
+
+        empty => {
+            match => qr/^(?:#.*|\ *)\n/,
             filter => sub {
                 my $node = shift;
-                $node->{attributes}{target} = $node->{2};
-                $_ = $node->{1} || $node->{2};
+                $node->{type} = '';
             },
+        },
+
+        else => {
+            match => qr/^(.*)\n/,
+            phrases => [],
+            filter => sub {
+                my $node = shift;
+                $node->{type} = 'p';
+            },
+        },
+
+        tt => {
+            match => re_huggy(q{\[\=}, q{\]}),
         },
 
         b => {
@@ -183,35 +182,49 @@ sub create_grammar {
             phrases => $all_phrases,
         },
 
-        tt => {
-            match => re_huggy(q{\`}),
-        },
-
         i => {
-            match => WikiText::Kwiki::Parser::re_huggy(q{\_}),
+            match => re_huggy(q{\/}),
             phrases => $all_phrases,
         },
 
-        a => {
-            type => 'hyperlink',
+        nolink => {
+            type => 'text',
+            match => qr/!(\w+)/,
+        },
+
+        camel => {
+            type => 'link',
+            match => qr/([A-Z][$ALPHANUM]*[a-z][A-Z][$ALPHANUM]*)/,
+            filter => sub {
+                my $node = shift;
+                $node->{attributes}{target} = $node->{1};
+            },
+        },
+
+        hyper => {
+            type => 'link',
             match => qr{
-                (?:"([^"]*)"\s*)?
-                <?
                 (
                     (?:http|https|ftp|irc|file):
                     (?://)?
                     [$uric]+
                     [A-Za-z0-9/#]
                 )
-                >?
             }x,
             filter => sub {
                 my $node = shift;
-                $_ = $node->{1} || $node->{2};
-                $node->{attributes}{target} = $node->{2};
+                $node->{attributes}{target} = $node->{1};
             },
         },
 
+        force => {
+            type => 'link',
+            match => qr/\[([^\]]+)\]/,
+            filter => sub {
+                my $node = shift;
+                $node->{attributes}{target} = $node->{1};
+            },
+        },
     };
 }
 
