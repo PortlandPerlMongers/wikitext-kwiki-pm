@@ -10,7 +10,7 @@ use strict;
 use warnings;
 use base 'WikiText::Emitter';
 
-use XXX;
+# use XXX;
 
 use constant N => "\n";
 use constant NN => "\n\n";

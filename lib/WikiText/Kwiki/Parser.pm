@@ -10,7 +10,7 @@ use strict;
 use warnings;
 use base 'WikiText::Parser';
 
-use XXX;
+# use XXX;
 
 # Reusable regexp generators used by the grammar
 my $ALPHANUM = '\p{Letter}\p{Number}\pM';
