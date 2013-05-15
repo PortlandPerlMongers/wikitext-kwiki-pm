@@ -19,13 +19,15 @@ sub run {
         or die usage("'$output_dir' not a directory");
     die usage("Unknown arguments: '@_'")
         if @_;
-    die usage("Output directory must be empty")
-        unless io->dir($output_dir)->empty;
+#     die usage("Output directory must be empty")
+#         unless io->dir($output_dir)->empty;
 
     for my $kwiki_file (io->dir($input_dir)->all_files) {
+        my $name = $kwiki_file->filename;
+        next if $name =~ /^\./;
+        print "$name\n";
         my $markdown = convert_kwiki_file(io($kwiki_file)->all);
         $markdown =~ s/\n\n\z/\n/;  # Remove extra final blank line.
-        my $name = $kwiki_file->filename;
         io->file("$output_dir/$name.md")->print($markdown);
     }
 }

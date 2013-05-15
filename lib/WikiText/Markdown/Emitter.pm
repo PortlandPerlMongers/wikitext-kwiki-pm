@@ -13,6 +13,7 @@ use base 'WikiText::Emitter';
 use XXX;
 
 use constant NN => "\n\n";
+my $pre = 0;
 
 # TODO
 # .pre conversion
@@ -21,6 +22,8 @@ use constant markdown => {
     h2 => ['## ', NN],
     h3 => ['### ', NN],
     h4 => ['#### ', NN],
+    h5 => ['##### ', NN],
+    h6 => ['###### ', NN],
     p => ['', NN],
     hr => ['---', NN],
     ul => [undef, undef],
@@ -35,6 +38,7 @@ use constant markdown => {
     table => ['', NN],
     tr => ['', "|\n"],
     td => ['| ', ' '],
+    pre => [undef, "\n"],
 };
 
 sub begin_node {
@@ -64,9 +68,20 @@ sub text_node {
     if ($self->{link}) {
         $self->{link_text} = $text;
     }
+    elsif ($pre) {
+        $pre = 0;
+        $text =~ s/^/    /gm;
+        $text =~ s/^ *$//gm;
+        $self->{output} .= $text;
+    }
     else {
         $self->{output} .= $text;
     }
+}
+
+sub begin_pre {
+    $pre = 1;
+    '';
 }
 
 sub begin_hyperlink {

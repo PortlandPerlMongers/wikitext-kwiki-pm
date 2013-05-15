@@ -10,6 +10,8 @@ use strict;
 use warnings;
 use base 'WikiText::Parser';
 
+use XXX;
+
 # Reusable regexp generators used by the grammar
 my $ALPHANUM = '\p{Letter}\p{Number}\pM';
 
@@ -18,29 +20,17 @@ my $reserved   = q{;/?:@&=+$,[]#};
 my $mark       = q{-_.!~*'()};
 my $unreserved = "A-Za-z0-9\Q$mark\E";
 my $uric       = quotemeta($reserved) . $unreserved . "%";
-my %im_types = (
-    yahoo  => 'yahoo',
-    ymsgr  => 'yahoo',
-    callto => 'callto',
-    skype  => 'callto',
-    callme => 'callto',
-    aim    => 'aim',
-    msn    => 'msn',
-    asap   => 'asap',
-);
-my $im_re = join '|', keys %im_types;
 
 sub create_grammar {
     my $all_phrases = [
-        qw(waflphrase asis wikilink a im mail tt b i del)
+        qw(wikilink a tt b i)
     ];
     my $all_blocks = [
         qw(
-            pre wafl_block
+            pre
             hr hx
-            waflparagraph
             ul ol
-            blockquote table
+            table
             p empty
             else
         )
@@ -62,17 +52,13 @@ sub create_grammar {
             },
         },
 
-        wafl_block => {
-            match => qr/(?:^\.([\w\-]+)\ *\n)((?:.*\n)*?)(?:\.\1\ *\n|\z)/,
-        },
-
         p => {
            match =>  qr/^(            # Capture whole thing
                 (?m:
                     ^(?!        # All consecutive lines *not* starting with
                     (?:
                         [\#\-\*]+[\ ] |
-                        [\^\|\>] |
+                        [\=\|\>] |
                         \.\w+\s*\n |
                         \{[^\}]+\}\s*\n
                     )
@@ -96,28 +82,13 @@ sub create_grammar {
         },
 
         pre => {
-            match => qr/^(?m:^\.pre\ *\n)((?:.*\n)*?)(?m:^\.pre\ *\n)(?:\s*\n)?/,
-        },
-
-        blockquote => {
-            match => qr/^((?m:^>.*\n)+)(\s*\n)?/,
-            blocks => $all_blocks,
-            filter => sub {
-                s/^>\ ?//gm;
-            },
-        },
-
-        waflparagraph => {
-            match => qr/^\{(.*)\}[\ \t]*\n(?:\s*\n)?/,
+            match => qr/^((?: +\S.*\n)(?:(?: +\S.*\n| *\n)*(?: +\S.*\n))?)/,
             filter => sub {
                 my $node = shift;
-                my ($function, $options) = split /[: ]/, $node->{text}, 2;
-                my $replacement = defined $1 ? $1 : '';
-                $options = '' unless defined $options; # protect against an undefined here
-                $options =~ s/\s*(.*?)\s*/$replacement/;
-                $node->{attributes}{function} = $function;
-                $node->{attributes}{options} = $options;
-                undef $_;
+                while (not /^\S/m) {
+                    s/^ //gm;
+                }
+                $node->{text} = $_;
             },
         },
 
@@ -132,15 +103,15 @@ sub create_grammar {
         },
 
         ul => {
-            match => re_list('[\*\-\+]'),
+            match => re_list('\*'),
             blocks => [qw(ul ol subl li)],
-            filter => sub { s/^[\*\-\+\#] *//mg },
+            filter => sub { s/^[\*\0] *//mg },
         },
 
         ol => {
-            match => re_list('\#'),
+            match => re_list('\0'),
             blocks => [qw(ul ol subl li)],
-            filter => sub { s/^[\*\#] *//mg },
+            filter => sub { s/^[\*\0] *//mg },
         },
 
         subl => {
@@ -149,8 +120,8 @@ sub create_grammar {
             match => qr/^(          # Block must start at beginning
                                     # Capture everything in $1
                 (.*)\n              # Capture the whole first line
-                [\*\#]+\ .*\n      # Line starting with one or more bullet
-                (?:[\*\#]+\ .*\n)*  # Lines starting with '*' or '#'
+                [\*\0]+\ .*\n      # Line starting with one or more bullet
+                (?:[\*\0]+\ .*\n)*  # Lines starting with '*' or '0'
             )(?:\s*\n)?/x,          # Eat trailing lines
             blocks => [qw(ul ol li2)],
         },
@@ -189,7 +160,6 @@ sub create_grammar {
             filter => sub { s/\s+\z// },
         },
 
-        # XXX Need to support blocks in TD
         td => {
             match => qr/\|?\s*(.*?)\s*\|\n?/s,
             phrases => $all_phrases,
@@ -222,59 +192,6 @@ sub create_grammar {
             phrases => $all_phrases,
         },
 
-        del => {
-            match => re_huggy(q{\-}),
-            phrases => $all_phrases,
-        },
-
-        im => {
-            match => qr/(\b(?:$im_re)\:[^\s\>\)]+)/,
-            filter => sub {
-                my $node = shift;
-                my ($type, $id) = split /:/, $node->{text}, 2;
-                $node->{attributes}{type} = $type;
-                $node->{attributes}{id} = $id;
-                undef $_;
-            },
-        },
-
-        waflphrase => {
-            match => qr/
-                (?:^|(?<=[\s\-]))
-                (?:"(.+?)")?
-                \{
-                ([\w-]+)
-                (?=[\:\ \}])
-                (?:\s*:)?
-                \s*(.*?)\s*
-                \}
-                (?=[^A-Za-z0-9]|\z)
-            /x,
-            filter => sub {
-                my $node = shift;
-                my ($label, $function, $options) = @{$node}{qw(1 2 3)};
-                $label ||= '';
-                $node->{attributes}{function} = $function;
-                $node->{attributes}{options} = $options;
-                $_ = $label;
-            },
-        },
-
-        mail => {
-            match => qr/
-                (?:"([^"]*)"\s*)?
-                <?
-                (?:mailto:)?
-                ([\w+%\-\.]+@(?:[\w\-]+\.)+[\w\-]+)
-                >?
-            /x,
-            filter => sub {
-                my $node = shift;
-                $_ = $node->{1} || $node->{2};
-                $node->{attributes}{address} = $node->{2};
-            },
-        },
-
         a => {
             type => 'hyperlink',
             match => qr{
@@ -292,19 +209,6 @@ sub create_grammar {
                 my $node = shift;
                 $_ = $node->{1} || $node->{2};
                 $node->{attributes}{target} = $node->{2};
-            },
-        },
-
-        asis => {
-            match => qr/
-                \{\{
-                (.*?)
-                \}\}(\}*)
-            /xs,
-            filter => sub {
-                my $node = shift;
-                $node->{type} = '';
-                $_ = $node->{1} . $node->{2};
             },
         },
 
@@ -327,7 +231,7 @@ sub re_list {
     return qr/^(            # Block must start at beginning
                             # Capture everything in $1
         ^$bullet+\ .*\n     # Line starting with one or more bullet
-        (?:[\*\-\+\#]+\ .*\n)*  # Lines starting with '*' or '#'
+        (?:[\*\0]+\ .*\n)*  # Lines starting with '*' or '0'
     )(?:\s*\n)?/x,          # Eat trailing lines
 }
 
