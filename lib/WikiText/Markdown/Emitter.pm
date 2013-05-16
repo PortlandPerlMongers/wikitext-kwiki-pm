@@ -105,7 +105,7 @@ sub end_link {
     my $l = $link;
     $link = '';
     if ($l =~ /^\w+$/) {
-        return "[$l](/$l)";
+        return "[[$l]]";
     }
     elsif ($l =~ /^(https?|ftp|irc|file):[^\ ]+$/) {
         return $l;
